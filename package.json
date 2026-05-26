@@ -1,0 +1,38 @@
+{
+  "name": "vtuber-companion",
+  "version": "1.0.0",
+  "description": "Floating Anime VTuber-style Assistant Overlay",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "./scripts/dev.sh",
+    "build": "vite build && electron-builder",
+    "install-deps": "./scripts/install.sh",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "@pixi/react": "^7.1.2",
+    "axios": "^1.6.8",
+    "better-sqlite3": "^9.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "electron-store": "^8.2.0",
+    "express": "^4.19.2",
+    "framer-motion": "^11.1.7",
+    "lucide-react": "^0.378.0",
+    "pixi.js": "^7.4.2",
+    "pixi.js-legacy": "^7.4.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.19",
+    "electron": "^29.3.1",
+    "electron-builder": "^24.13.3",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
+    "vite": "^5.2.11"
+  }
+}

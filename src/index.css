@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    margin: 0;
+    padding: 0;
+    background: transparent !important;
+    overflow: hidden;
+    user-select: none;
+    -webkit-app-region: drag; /* Default whole body draggable, override on interactive elements */
+  }
+
+  /* Non-draggable elements */
+  input, button, select, textarea, canvas, .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  input, textarea {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+  }
+}
+
+@layer utilities {
+  /* Premium Glassmorphism Panel styles */
+  .glass-panel {
+    background: rgba(20, 20, 25, 0.55);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  /* Glow Filters for Avatar Sprite */
+  .avatar-glow {
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.25))
+            drop-shadow(0 0 5px rgba(255, 110, 180, 0.2));
+  }
+
+  .avatar-glow-speaking {
+    filter: drop-shadow(0 0 12px rgba(255, 110, 180, 0.5))
+            drop-shadow(0 0 6px rgba(126, 184, 255, 0.35));
+  }
+
+  /* Custom animations */
+  .pulse-glow-pink {
+    box-shadow: 0 0 0 0 rgba(255, 110, 180, 0.7);
+    animation: pulse-pink 2s infinite;
+  }
+
+  @keyframes pulse-pink {
+    0% {
+      transform: scale(0.95);
+      box-shadow: 0 0 0 0 rgba(255, 110, 180, 0.7);
+    }
+    70% {
+      transform: scale(1);
+      box-shadow: 0 0 0 12px rgba(255, 110, 180, 0);
+    }
+    100% {
+      transform: scale(0.95);
+      box-shadow: 0 0 0 0 rgba(255, 110, 180, 0);
+    }
+  }
+}

@@ -1,0 +1,20 @@
+appId: com.nanu.vtubercompanion
+productName: VTuberCompanion
+directories:
+  output: dist-electron
+  buildResources: assets
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility
+  icon: assets/tray-icon.png
+extraResources:
+  - models/**/*
+asar: true
+asarUnpack:
+  - "**/models/*"
