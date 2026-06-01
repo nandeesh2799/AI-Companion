@@ -59,6 +59,12 @@ const App = () => {
   // System context & Settings
   const [enableVision, setEnableVision] = useState(false);
   const [currentWindow, setCurrentWindow] = useState('');
+  const [cpuUsage, setCpuUsage] = useState(0);
+  const [ramUsage, setRamUsage] = useState(0);
+  const [musicInfo, setMusicInfo] = useState(null);
+  const [idleTime, setIdleTime] = useState(0);
+  const [activeApps, setActiveApps] = useState({ browsers: [], coding: [], activeApps: [] });
+  const [recentFiles, setRecentFiles] = useState([]);
   const [inputLevel, setInputLevel] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -71,10 +77,22 @@ const App = () => {
   // Live refs for values used inside STT callback (avoids stale closures)
   const enableVisionRef = useRef(enableVision);
   const currentWindowRef = useRef(currentWindow);
+  const cpuUsageRef = useRef(0);
+  const ramUsageRef = useRef(0);
+  const musicInfoRef = useRef(null);
+  const idleTimeRef = useRef(0);
+  const activeAppsRef = useRef({ browsers: [], coding: [], activeApps: [] });
+  const recentFilesRef = useRef([]);
   const characterRef = useRef(character);
 
   useEffect(() => { enableVisionRef.current = enableVision; }, [enableVision]);
   useEffect(() => { currentWindowRef.current = currentWindow; }, [currentWindow]);
+  useEffect(() => { cpuUsageRef.current = cpuUsage; }, [cpuUsage]);
+  useEffect(() => { ramUsageRef.current = ramUsage; }, [ramUsage]);
+  useEffect(() => { musicInfoRef.current = musicInfo; }, [musicInfo]);
+  useEffect(() => { idleTimeRef.current = idleTime; }, [idleTime]);
+  useEffect(() => { activeAppsRef.current = activeApps; }, [activeApps]);
+  useEffect(() => { recentFilesRef.current = recentFiles; }, [recentFiles]);
   useEffect(() => { characterRef.current = character; }, [character]);
 
   // 1. Fetch initial character on mount
@@ -121,18 +139,28 @@ const App = () => {
             characterId: characterRef.current.id,
             message: cleanTranscript,
             enableVision: enableVisionRef.current,
-            currentWindow: currentWindowRef.current
+            currentWindow: currentWindowRef.current,
+            cpu: cpuUsageRef.current,
+            ram: ramUsageRef.current,
+            music: musicInfoRef.current,
+            idleTime: idleTimeRef.current,
+            apps: activeAppsRef.current,
+            recentFiles: recentFilesRef.current
           });
 
           const { text, emotion: nextEmotionRaw, intensity: backendIntensity } = response.data;
           const nextEmotion = normalizeEmotionForUI(nextEmotionRaw);
           const reactionIntensity = inferReactionIntensity(text, nextEmotion, backendIntensity);
-          setEmotion(nextEmotion);
-          eventBus.emit('emotion:trigger', { emotion: nextEmotion, intensity: reactionIntensity });
 
-          // Synthesize response speech
-          setStatus('speaking');
-          await ttsControllerRef.current.speak(text, characterRef.current.tts_provider, characterRef.current.voice_id);
+          // Synthesize response speech (keep status as 'thinking' while compiling audio)
+          setStatus('thinking');
+          await ttsControllerRef.current.speak(
+            text,
+            characterRef.current.tts_provider,
+            characterRef.current.voice_id,
+            nextEmotion,
+            reactionIntensity
+          );
         } catch (err) {
           console.error("Failed to process transcription prompt:", err);
           setStatus('idle');
@@ -171,6 +199,12 @@ const App = () => {
       setIsSubtitleVisible(true);
     });
 
+    const unsubscribeAudioStart = eventBus.on('speech:audio-start', ({ emotion, intensity }) => {
+      setStatus('speaking');
+      setEmotion(emotion);
+      eventBus.emit('emotion:trigger', { emotion, intensity });
+    });
+
     const unsubscribeSpeechEnd = eventBus.on('speech:end', () => {
       setStatus('idle');
       setIsSubtitleVisible(false);
@@ -188,6 +222,7 @@ const App = () => {
 
     return () => {
       unsubscribeSpeechStart();
+      unsubscribeAudioStart();
       unsubscribeSpeechEnd();
       if (ttsControllerRef.current) ttsControllerRef.current.stop();
       if (emotionResetTimerRef.current) {
@@ -203,13 +238,13 @@ const App = () => {
     let autoListenTimer = null;
 
     if (status === 'idle' && !isMuted) {
-      // Wait 1500ms after speech ends to avoid recording Aria's trailing audio echo
+      // Wait 600ms after speech ends to avoid recording Aria's trailing audio echo
       autoListenTimer = setTimeout(() => {
         console.log("[App] Auto-starting continuous microphone capture...");
         setStatus('listening');
         setEmotion('idle');
         sttControllerRef.current.startRecording(true);
-      }, 1500);
+      }, 600);
     } else if (status !== 'listening' && status !== 'thinking' && status !== 'speaking') {
       // If we are idle and muted, make sure recording is stopped
       sttControllerRef.current.stopRecording();
@@ -284,6 +319,12 @@ const App = () => {
         const response = await axios.get('http://127.0.0.1:3001/api/system/status');
         if (response.data) {
           setCurrentWindow(response.data.activeWindow);
+          setCpuUsage(response.data.cpu);
+          setRamUsage(response.data.ram);
+          setMusicInfo(response.data.music);
+          setIdleTime(response.data.idleTime);
+          setActiveApps(response.data.apps || { browsers: [], coding: [], activeApps: [] });
+          setRecentFiles(response.data.recentFiles || []);
         }
       } catch (err) {
         console.warn("Failed to query active window status:", err.message);
@@ -330,22 +371,24 @@ const App = () => {
       />
 
       {/* Main interactive desktop companion avatar */}
-      <div className={`absolute bottom-0 right-0 flex h-[320px] w-[220px] items-end justify-end ${
+      <div className={`absolute bottom-0 right-0 flex h-[340px] w-[240px] items-end justify-end ${
         status === 'speaking' ? 'avatar-glow-speaking' : 'avatar-glow'
       }`}>
         <AvatarCanvas
+          avatarType={character.avatar_type}
+          avatarPath={character.avatar_path}
           currentEmotion={emotion}
           isSpeaking={status === 'speaking'}
           isListening={status === 'listening'}
         />
       </div>
 
-      {/* Live subtitles for assistant speech output */}
-      <SubtitleBar
+      {/* Live subtitles for assistant speech output (temporarily disabled) */}
+      {/* <SubtitleBar
         text={subtitleText}
         name={character.name}
         visible={isSubtitleVisible}
-      />
+      /> */}
 
       {/* Microphone capture controller button bar */}
       <MicButton

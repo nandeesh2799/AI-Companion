@@ -15,22 +15,9 @@ const MicButton = ({
   const outerScale = (status === 'listening' && !isMuted) ? 1.0 + inputLevel * 0.45 : 1.0;
 
   return (
-    <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-4 no-drag z-30">
+    <div className="absolute top-[52px] right-[4px] flex flex-col items-center no-drag z-30">
       
-      {/* 1. Vision Mode Toggle (Left helper button) */}
-      <button
-        onClick={onToggleVision}
-        className={`p-2.5 rounded-full transition-all duration-300 border ${
-          enableVision 
-            ? 'bg-companion-pink/25 border-companion-pink text-white shadow-[0_0_8px_rgba(255,110,180,0.4)]' 
-            : 'bg-black/40 border-white/10 text-gray-400 hover:text-white'
-        }`}
-        title={enableVision ? "Vision Mode: On (Sees your desktop)" : "Vision Mode: Off (Privacy-first)"}
-      >
-        <Eye className="w-4 h-4" />
-      </button>
-
-      {/* 2. Main Record Button */}
+      {/* Main Record Button */}
       <div className="relative">
         {/* Breathing / Pulse wave rings */}
         <AnimatePresenceOuterRing status={status} outerScale={outerScale} isMuted={isMuted} />
@@ -60,9 +47,6 @@ const MicButton = ({
           )}
         </motion.button>
       </div>
-
-      {/* Status Label or placeholder right button (e.g. settings) */}
-      <div className="w-9 h-9" />
     </div>
   );
 };

@@ -5,6 +5,50 @@ const MemoryManager = require('../db/MemoryManager.js');
 const VectorMemory = require('../db/VectorMemory.js');
 const AIRouter = require('../ai/AIRouter.js');
 const VisionManager = require('../system/VisionManager.js');
+const { exec } = require('child_process');
+
+const APP_LAUNCH_COMMANDS = {
+  'vscode': 'code',
+  'vs code': 'code',
+  'code': 'code',
+  'spotify': 'spotify',
+  'chrome': 'google-chrome',
+  'google chrome': 'google-chrome',
+  'browser': 'google-chrome',
+  'firefox': 'firefox',
+  'calculator': 'gnome-calculator',
+  'terminal': 'gnome-terminal',
+  'nautilus': 'nautilus',
+  'files': 'nautilus',
+  'file manager': 'nautilus',
+  'discord': 'discord',
+  'slack': 'slack',
+  'gimp': 'gimp',
+  'vlc': 'vlc'
+};
+
+function launchApp(appName) {
+  const binary = APP_LAUNCH_COMMANDS[appName];
+  if (binary) {
+    console.log(`[System Actions] Launching whitelisted application: ${binary}`);
+    exec(`${binary} &`, (err) => {
+      if (err) {
+        console.error(`[System Actions] Failed to launch ${binary}:`, err.message);
+      }
+    });
+  } else {
+    // Fallback: sanitized alphanumeric names to prevent shell injection
+    const sanitized = appName.replace(/[^a-z0-9_-]/g, '');
+    if (sanitized) {
+      console.log(`[System Actions] Launching sanitized application command: ${sanitized}`);
+      exec(`${sanitized} &`, (err) => {
+        if (err) {
+          console.error(`[System Actions] Failed to launch ${sanitized}:`, err.message);
+        }
+      });
+    }
+  }
+}
 
 const VALID_EMOTIONS = ['idle', 'happy', 'angry', 'embarrassed', 'excited', 'sleepy', 'smug', 'shocked', 'thinking'];
 const EMOTION_ALIASES = {
@@ -115,7 +159,18 @@ function scanFallbackEmotion(userInput, aiOutput) {
 
 // POST endpoint for Chat exchanges
 router.post('/', async (req, res) => {
-  const { characterId, message, enableVision = false, currentWindow = "" } = req.body;
+  const { 
+    characterId, 
+    message, 
+    enableVision = false, 
+    currentWindow = "", 
+    cpu = null, 
+    ram = null,
+    music = null,
+    idleTime = 0,
+    apps = null,
+    recentFiles = null
+  } = req.body;
 
   if (!characterId || !message) {
     return res.status(400).json({ error: "Missing characterId or message in payload." });
@@ -148,11 +203,44 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // 5. Gather desktop active window and time context
-    const currentTimeStr = new Date().toLocaleTimeString();
-    const systemContext = currentWindow 
-      ? `\nUser's current active window: "${currentWindow}"`
-      : "";
+    // 5. Gather desktop active window, CPU, RAM and time context
+    const currentTimeStr = new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: true
+    });
+    let systemContext = "";
+    if (currentWindow) {
+      systemContext += `\nUser's current active window: "${currentWindow}"`;
+    }
+    if (cpu !== null && cpu !== undefined) {
+      systemContext += `\nUser's current system CPU usage: ${cpu}%`;
+    }
+    if (ram !== null && ram !== undefined) {
+      systemContext += `\nUser's current system RAM usage: ${ram}%`;
+    }
+    if (music && music.status && music.status !== 'Stopped') {
+      systemContext += `\nUser's current music playback: Status is "${music.status}", track: "${music.track}"`;
+    }
+    if (idleTime && idleTime > 5000) { // user idle for more than 5 seconds
+      const idleSec = Math.round(idleTime / 1000);
+      systemContext += `\nUser idle state: User has been idle (no keyboard/mouse input) for ${idleSec} seconds`;
+    }
+    if (apps) {
+      if (apps.browsers && apps.browsers.length > 0) {
+        systemContext += `\nRunning Web Browsers: ${apps.browsers.join(', ')}`;
+      }
+      if (apps.coding && apps.coding.length > 0) {
+        systemContext += `\nRunning Coding/Editor Environments: ${apps.coding.join(', ')}`;
+      }
+      if (apps.activeApps && apps.activeApps.length > 0) {
+        systemContext += `\nOther running active apps: ${apps.activeApps.join(', ')}`;
+      }
+    }
+    if (recentFiles && recentFiles.length > 0) {
+      systemContext += `\nUser's recently modified/opened files:\n${recentFiles.map(f => `- ${f}`).join('\n')}`;
+    }
 
     // 6. Build the dynamic system prompt
     const fullSystemPrompt = `
@@ -173,23 +261,74 @@ ${memoryContext}
       config: character
     });
 
-    // 8. Parse Response for [EMOTION:X] tags
-    let cleanText = result.text;
+    // 8. Parse Response for starting emotion tags [happy], [teasing], etc.
+    let cleanText = result.text.trim();
     let emotion = 'idle';
 
+    const startEmotionMatch = cleanText.match(/^\[([a-z]+)\]/i);
+    if (startEmotionMatch) {
+      const parsedEmotion = normalizeEmotion(startEmotionMatch[1]);
+      if (parsedEmotion && parsedEmotion !== 'idle') {
+        emotion = parsedEmotion;
+      }
+      // Remove starting tag from final visual text output
+      cleanText = cleanText.replace(/^\[[a-z]+\]\s*/i, '').trim();
+    }
+
+    // Parse Response for ending [EMOTION:X] tags
     const emotionMatch = cleanText.match(/\[EMOTION:([^\]]+)\]/i);
     if (emotionMatch) {
-      emotion = normalizeEmotion(emotionMatch[1]);
+      const parsedEmotion = normalizeEmotion(emotionMatch[1]);
+      if (parsedEmotion && parsedEmotion !== 'idle') {
+        emotion = parsedEmotion;
+      }
       // Remove tag from final visual text output
       cleanText = cleanText.replace(/\[EMOTION:[^\]]+\]/gi, '').trim();
-    } else {
-      // Fallback keyword scanning
+    }
+
+    // Fallback keyword scanning if still idle
+    if (emotion === 'idle') {
       emotion = normalizeEmotion(scanFallbackEmotion(message, cleanText));
     }
 
     // Validate emotion exists in standard mappings
     if (!VALID_EMOTIONS.includes(emotion)) {
       emotion = 'idle';
+    }
+
+    // 8.5. Parse Response for [ACTION:open_app:X] tags
+    const actionMatch = cleanText.match(/\[ACTION:open_app:([^\]]+)\]/i);
+    let appToLaunch = null;
+    if (actionMatch) {
+      appToLaunch = actionMatch[1].trim().toLowerCase();
+      cleanText = cleanText.replace(/\[ACTION:open_app:[^\]]+\]/gi, '').trim();
+    } else {
+      // Fallback: If no tag was generated, scan user message for launch intent
+      const userLower = message.toLowerCase();
+      const appKeywords = {
+        'vscode': ['vscode', 'vs code', 'visual studio code'],
+        'spotify': ['spotify'],
+        'chrome': ['chrome', 'google chrome'],
+        'firefox': ['firefox'],
+        'calculator': ['calculator', 'gnome-calculator'],
+        'terminal': ['terminal', 'gnome-terminal'],
+        'nautilus': ['nautilus', 'files', 'file manager'],
+        'discord': ['discord'],
+        'slack': ['slack']
+      };
+
+      if (userLower.includes('open') || userLower.includes('launch') || userLower.includes('start') || userLower.includes('run')) {
+        for (const [appKey, keywords] of Object.entries(appKeywords)) {
+          if (keywords.some(kw => userLower.includes(kw))) {
+            appToLaunch = appKey;
+            break;
+          }
+        }
+      }
+    }
+
+    if (appToLaunch) {
+      launchApp(appToLaunch);
     }
 
     const intensity = deriveEmotionIntensity(message, cleanText, emotion);

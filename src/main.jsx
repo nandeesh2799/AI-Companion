@@ -1,3 +1,6 @@
+import * as PIXI from 'pixi.js-legacy';
+window.PIXI = PIXI;
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';

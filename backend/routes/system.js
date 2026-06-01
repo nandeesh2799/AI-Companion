@@ -4,6 +4,9 @@ const os = require('os');
 const { exec } = require('child_process');
 const db = require('../db/database.js');
 
+const fs = require('fs');
+const path = require('path');
+
 // Helper to query active window title on Linux
 function getActiveWindowTitle() {
   return new Promise((resolve) => {
@@ -24,25 +27,114 @@ function getActiveWindowTitle() {
   });
 }
 
+// Helper for music playback status
+function getMusicPlayback() {
+  return new Promise((resolve) => {
+    exec('playerctl status && playerctl metadata --format "{{ artist }} - {{ title }}"', (error, stdout) => {
+      if (error) {
+        return resolve(null);
+      }
+      const lines = stdout.trim().split('\n');
+      const status = lines[0] || 'Stopped';
+      const metadata = lines[1] || '';
+      resolve({ status, track: metadata });
+    });
+  });
+}
+
+// Helper for user idle state
+function getUserIdleTime() {
+  return new Promise((resolve) => {
+    exec('xprintidle', (error, stdout) => {
+      if (error) {
+        return resolve(0);
+      }
+      const idleMs = parseInt(stdout.trim(), 10);
+      resolve(isNaN(idleMs) ? 0 : idleMs);
+    });
+  });
+}
+
+// Helper for active processes (browsers, IDEs, common apps)
+function getSystemApps() {
+  return new Promise((resolve) => {
+    exec('ps -eo comm', (error, stdout) => {
+      if (error) {
+        return resolve({ apps: [], coding: [], browsers: [] });
+      }
+      const processes = stdout.split('\n').map(p => p.trim().toLowerCase());
+      const uniqueProcesses = [...new Set(processes)];
+
+      const browsersList = ['chrome', 'firefox', 'opera', 'brave', 'microsoft-edge', 'edge', 'chromium'];
+      const codingList = ['code', 'cursor', 'sublime_text', 'sublime', 'pycharm', 'webstorm', 'clion', 'idea', 'eclipse', 'netbeans', 'vim', 'nvim', 'emacs', 'atom'];
+      const commonAppsList = ['spotify', 'vlc', 'discord', 'slack', 'thunderbird', 'gimp', 'inkscape', 'blender', 'steam', 'zoom', 'teams'];
+
+      const browsers = uniqueProcesses.filter(p => browsersList.some(b => p.includes(b)));
+      const coding = uniqueProcesses.filter(p => codingList.some(c => p.includes(c)));
+      const activeApps = uniqueProcesses.filter(p => commonAppsList.some(a => p.includes(a)));
+
+      resolve({
+        browsers: browsers.map(b => b.replace('-bin', '')),
+        coding: coding,
+        activeApps: activeApps
+      });
+    });
+  });
+}
+
+// Helper to get recently used files (file operations)
+function getRecentFiles() {
+  return new Promise((resolve) => {
+    const filePath = path.join(os.homedir(), '.local', 'share', 'recently-used.xbel');
+    fs.readFile(filePath, 'utf8', (err, data) => {
+      if (err) return resolve([]);
+      // Find all file urls
+      const matches = [...data.matchAll(/href="file:\/\/([^"]+)"/g)];
+      // Get paths and reverse to show most recent first
+      const files = matches.map(m => {
+        try {
+          return decodeURIComponent(m[1]);
+        } catch (e) {
+          return m[1];
+        }
+      }).reverse();
+      const uniqueFiles = [...new Set(files)].slice(0, 5);
+      resolve(uniqueFiles);
+    });
+  });
+}
+
 // GET active window, CPU and Memory stats
 router.get('/status', async (req, res) => {
-  const totalMem = os.totalmem();
-  const freeMem = os.freemem();
-  const usedMem = totalMem - freeMem;
-  const memPercent = Math.round((usedMem / totalMem) * 100);
-  
-  // Calculate approximate CPU utilization
-  const cpus = os.cpus();
-  const load = os.loadavg();
-  const cpuPercent = Math.round((load[0] / cpus.length) * 100);
+  try {
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+    const memPercent = Math.round((usedMem / totalMem) * 100);
+    
+    // Calculate approximate CPU utilization
+    const cpus = os.cpus();
+    const load = os.loadavg();
+    const cpuPercent = Math.round((load[0] / cpus.length) * 100);
 
-  const activeWindow = await getActiveWindowTitle();
+    const activeWindow = await getActiveWindowTitle();
+    const music = await getMusicPlayback();
+    const idleMs = await getUserIdleTime();
+    const apps = await getSystemApps();
+    const recentFiles = await getRecentFiles();
 
-  res.json({
-    cpu: Math.min(cpuPercent, 100),
-    ram: memPercent,
-    activeWindow: activeWindow || "Desktop"
-  });
+    res.json({
+      cpu: Math.min(cpuPercent, 100),
+      ram: memPercent,
+      activeWindow: activeWindow || "Desktop",
+      music: music,
+      idleTime: idleMs,
+      apps: apps,
+      recentFiles: recentFiles
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET all characters (Profiles switcher)

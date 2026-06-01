@@ -19,6 +19,7 @@
     "express": "^4.19.2",
     "framer-motion": "^11.1.7",
     "lucide-react": "^0.378.0",
+    "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^7.4.2",
     "pixi.js-legacy": "^7.4.3",
     "react": "^18.3.1",

@@ -89,15 +89,15 @@ export default class STTController {
         this.hasSpoken = false;
 
         // ── Adaptive Noise Calibration ──────────────────────────────────
-        // Spend the first 600ms measuring the ambient noise floor, then set
-        // the voice-detection threshold 3× above it (min 0.006 to stay sensitive).
-        const CALIBRATION_MS = 600;
+        // Spend the first 200ms measuring the ambient noise floor, then set
+        // the voice-detection threshold 3.5× above it (min 0.006 to stay sensitive).
+        const CALIBRATION_MS = 200;
         let noiseSamples = [];
         let adaptiveThreshold = 0.010; // initial conservative default
         let calibrated = false;
 
-        const silenceDuration = 900;   // 0.9s of silence ends recording (snappy)
-        const minSpeechDuration = 250; // ignore ultra-short blips < 250ms
+        const silenceDuration = 350;   // 0.35s of silence ends recording (near instant response)
+        const minSpeechDuration = 150; // ignore ultra-short blips < 150ms
         let speechStartTime = null;
         const startTime = Date.now();
         const maxDuration = 12000;     // extended safety cap (12s)

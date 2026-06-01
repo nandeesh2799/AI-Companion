@@ -10,6 +10,8 @@ export default class TTSController {
     this.safetyTimeout = null;
     this.currentText = '';
     this.currentVoiceId = '';
+    this.currentEmotion = 'idle';
+    this.currentIntensity = 1;
     
     // Configure CORS so Web Audio can inspect amplitudes
     this.audioElement.crossOrigin = "anonymous";
@@ -29,7 +31,7 @@ export default class TTSController {
       console.warn("HTML5 audio playback error, falling back to browser synthesis...", e);
       this.clearSafetyTimeout();
       this.amplitudeAnalyzer.disconnect();
-      this.speakBrowserFallback(this.currentText, this.currentVoiceId);
+      this.speakBrowserFallback(this.currentText, this.currentVoiceId, this.currentEmotion, this.currentIntensity);
     };
   }
 
@@ -53,11 +55,13 @@ export default class TTSController {
   }
 
   // Speak using configured backend provider or Web Speech API fallback
-  async speak(text, provider = 'edge-tts', voiceId = 'en-US-AnaNeural') {
+  async speak(text, provider = 'edge-tts', voiceId = 'en-US-AnaNeural', emotion = 'idle', intensity = 1) {
     this.stop();
     this.isPlaying = true;
     this.currentText = text;
     this.currentVoiceId = voiceId;
+    this.currentEmotion = emotion;
+    this.currentIntensity = intensity;
     this._audioErrorHandled = false; // guard against double onerror + fallback
     
     // Emit cleaned text to UI — no asterisk expressions in subtitles or chat bubble
@@ -83,7 +87,7 @@ export default class TTSController {
 
       if (response.data && response.data.fallback) {
         console.warn("TTS Backend fallback flagged. Running browser synthesis.");
-        this.speakBrowserFallback(text, voiceId);
+        this.speakBrowserFallback(text, voiceId, emotion, intensity);
       } else if (response.data && response.data.audioUrl) {
         // Play local WAV output served from Express backend
         const audioSource = `http://localhost:3001${response.data.audioUrl}?t=${Date.now()}`;
@@ -99,11 +103,12 @@ export default class TTSController {
         // Connect to Web Audio Analyser node to drive mouth viseme sync
         this.audioElement.play().then(() => {
           this.amplitudeAnalyzer.connectAudioElement(this.audioElement);
+          eventBus.emit('speech:audio-start', { emotion, intensity });
         }).catch(err => {
           console.warn("Audio play failed. Retrying with browser fallback:", err.message);
           if (!this._audioErrorHandled) {
             this._audioErrorHandled = true;
-            this.speakBrowserFallback(text, voiceId);
+            this.speakBrowserFallback(text, voiceId, emotion, intensity);
           }
         });
       }
@@ -111,13 +116,13 @@ export default class TTSController {
       console.error("TTS API error, attempting browser fallback:", err);
       if (this.isPlaying && !this._audioErrorHandled) {
         this._audioErrorHandled = true;
-        this.speakBrowserFallback(text, voiceId);
+        this.speakBrowserFallback(text, voiceId, emotion, intensity);
       }
     }
   }
 
   // Speak browser-native fallback using Web Speech API
-  speakBrowserFallback(text, voiceId) {
+  speakBrowserFallback(text, voiceId, emotion = 'idle', intensity = 1) {
     // If not playing anymore (e.g. stopped during backend call), abort
     if (!this.isPlaying) return;
 
@@ -146,6 +151,7 @@ export default class TTSController {
     // we mock visual mouth movement values periodically using a timer while it plays
     let mouthMockTimer = null;
     utterance.onstart = () => {
+      eventBus.emit('speech:audio-start', { emotion, intensity });
       mouthMockTimer = setInterval(() => {
         // Random speaking amplitude between 0.1 and 0.8
         const mockAmp = 0.1 + Math.random() * 0.7;

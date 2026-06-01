@@ -9,10 +9,10 @@ import MouthSync from './MouthSync';
 const CANVAS_WIDTH = 220;
 const CANVAS_HEIGHT = 320;
 const BASE_X = CANVAS_WIDTH / 2;
-const BASE_Y = 224;
-const BASE_SCALE = 0.36;
+const BASE_Y = 160;
+const BASE_SCALE = 0.31;
 
-const AvatarSprite = ({ currentEmotion = 'idle', isSpeaking = false, isListening = false }) => {
+const AvatarSprite = ({ currentEmotion = 'idle', isSpeaking = false, isListening = false, avatarPath }) => {
   const canvasRef = useRef(null);
   const appRef = useRef(null);
   const spriteRef = useRef(null);
@@ -69,23 +69,25 @@ const AvatarSprite = ({ currentEmotion = 'idle', isSpeaking = false, isListening
     });
     appRef.current = app;
 
+    const base = avatarPath || 'assets/avatar';
+
     // 2. Load all sprite textures
     const textureMap = {
-      idle: PIXI.Texture.from('assets/avatar/idle.png'),
-      blink_1: PIXI.Texture.from('assets/avatar/blink_1.png'),
-      blink_2: PIXI.Texture.from('assets/avatar/blink_2.png'),
-      mouth_closed: PIXI.Texture.from('assets/avatar/mouth_closed.png'),
-      mouth_a: PIXI.Texture.from('assets/avatar/mouth_a.png'),
-      mouth_i: PIXI.Texture.from('assets/avatar/mouth_i.png'),
-      mouth_u: PIXI.Texture.from('assets/avatar/mouth_u.png'),
-      happy: PIXI.Texture.from('assets/avatar/emotion_happy.png'),
-      angry: PIXI.Texture.from('assets/avatar/emotion_angry.png'),
-      embarrassed: PIXI.Texture.from('assets/avatar/emotion_embarrassed.png'),
-      excited: PIXI.Texture.from('assets/avatar/emotion_excited.png'),
-      sleepy: PIXI.Texture.from('assets/avatar/emotion_sleepy.png'),
-      smug: PIXI.Texture.from('assets/avatar/emotion_smug.png'),
-      shocked: PIXI.Texture.from('assets/avatar/emotion_shocked.png'),
-      thinking: PIXI.Texture.from('assets/avatar/emotion_thinking.png')
+      idle: PIXI.Texture.from(`${base}/idle.png`),
+      blink_1: PIXI.Texture.from(`${base}/blink_1.png`),
+      blink_2: PIXI.Texture.from(`${base}/blink_2.png`),
+      mouth_closed: PIXI.Texture.from(`${base}/mouth_closed.png`),
+      mouth_a: PIXI.Texture.from(`${base}/mouth_a.png`),
+      mouth_i: PIXI.Texture.from(`${base}/mouth_i.png`),
+      mouth_u: PIXI.Texture.from(`${base}/mouth_u.png`),
+      happy: PIXI.Texture.from(`${base}/emotion_happy.png`),
+      angry: PIXI.Texture.from(`${base}/emotion_angry.png`),
+      embarrassed: PIXI.Texture.from(`${base}/emotion_embarrassed.png`),
+      excited: PIXI.Texture.from(`${base}/emotion_excited.png`),
+      sleepy: PIXI.Texture.from(`${base}/emotion_sleepy.png`),
+      smug: PIXI.Texture.from(`${base}/emotion_smug.png`),
+      shocked: PIXI.Texture.from(`${base}/emotion_shocked.png`),
+      thinking: PIXI.Texture.from(`${base}/emotion_thinking.png`)
     };
 
     // Create container and base sprite
@@ -297,10 +299,10 @@ const AvatarSprite = ({ currentEmotion = 'idle', isSpeaking = false, isListening
       }
       app.destroy(false, { children: true, texture: false, baseTexture: false });
     };
-  }, []);
+  }, [avatarPath]);
 
   return (
-    <div className="relative h-[320px] w-[220px]">
+    <div className="relative h-[340px] w-[240px]">
       <canvas ref={canvasRef} className="pointer-events-none block" />
     </div>
   );
